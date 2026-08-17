@@ -1,4 +1,30 @@
-*.duckdb
-/target
+# Credentials & secrets
 creds/
 .env
+*.tfvars
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfplan
+
+# Data files
+*.duckdb
+fpl_sample.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# dbt
+/target
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# OS
+.DS_Store
+Thumbs.db
