@@ -1,0 +1,70 @@
+id: understat_ingest
+namespace: xfpl
+
+description: |
+  Weekly Understat extraction pipeline.
+  Scrapes per-player, per-match advanced stats (xG, xA, npxG, 
+  xGChain, xGBuildup, shots, key passes) for the EPL season
+  and uploads to GCS.
+
+inputs:
+  - id: season
+    type: STRING
+    defaults: "2026"
+
+tasks:
+  - id: scrape_understat
+    type: io.kestra.plugin.scripts.python.Script
+    taskRunner:
+      type: io.kestra.plugin.scripts.runner.docker.Docker
+    containerImage: python:3.11-slim
+    beforeCommands:
+      - pip install soccerdata pandas
+    outputFiles:
+      - "*.csv"
+    script: |
+      import soccerdata as sd
+      import pandas as pd
+      from datetime import datetime
+
+      season = "{{ inputs.season }}"  # Just the starting year, e.g. "2026" for 2026-27
+      today = datetime.now().strftime("%Y-%m-%d")
+
+      print(f"Scraping Understat for EPL {season}...")
+
+      try:
+          understat = sd.Understat(leagues="ENG-Premier League", seasons=season)
+
+          # Player season-level stats: xG, xA, npxG, xGChain, xGBuildup, shots, key_passes
+          player_stats = understat.read_player_season_stats()
+          player_stats.to_csv(f"understat_player_season_{today}.csv")
+          print(f"Player season stats: {len(player_stats)} rows")
+
+          # Per-match stats for deeper granularity
+          match_stats = understat.read_player_match_stats()
+          match_stats.to_csv(f"understat_player_matches_{today}.csv")
+          print(f"Player match stats: {len(match_stats)} rows")
+
+      except Exception as e:
+          print(f"Error scraping Understat: {e}")
+          # Write empty fallback CSVs so downstream upload tasks don't fail looking for missing files
+          empty_df = pd.DataFrame({"status": ["no_data_or_error"], "error": [str(e)], "date": [today]})
+          empty_df.to_csv(f"understat_player_season_{today}.csv", index=False)
+          empty_df.to_csv(f"understat_player_matches_{today}.csv", index=False)
+
+  - id: upload_season_stats
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.scrape_understat.outputFiles['understat_player_season_' ~ (now() | date('yyyy-MM-dd')) ~ '.csv'] }}"
+    to: "gs://fpl_raw_archive_de-project-allan/understat/understat_player_season_{{ now() | date('yyyy-MM-dd') }}.csv"
+    projectId: de-project-allan
+
+  - id: upload_match_stats
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.scrape_understat.outputFiles['understat_player_matches_' ~ (now() | date('yyyy-MM-dd')) ~ '.csv'] }}"
+    to: "gs://fpl_raw_archive_de-project-allan/understat/understat_player_matches_{{ now() | date('yyyy-MM-dd') }}.csv"
+    projectId: de-project-allan
+
+triggers:
+  - id: weekly_monday
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 9 * * 1"

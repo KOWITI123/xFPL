@@ -1,0 +1,96 @@
+id: fpl_ingest
+namespace: xfpl
+
+description: |
+  Weekly FPL data extraction pipeline.
+  Fetches player data, fixtures, and current gameweek live stats
+  from the FPL API and uploads to GCS.
+
+inputs:
+  - id: season
+    type: STRING
+    defaults: "2026-27"
+
+tasks:
+  # ── 1. Bootstrap-static: players, teams, gameweeks ──
+  - id: fetch_bootstrap
+    type: io.kestra.plugin.core.http.Download
+    uri: https://fantasy.premierleague.com/api/bootstrap-static/
+
+  - id: upload_bootstrap
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.fetch_bootstrap.uri }}"
+    to: "gs://fpl_raw_archive_de-project-allan/fpl/snapshots/fpl_snapshot_{{ now() | date('yyyy-MM-dd') }}.json"
+    projectId: de-project-allan
+
+  # ── 2. Fixtures: all matches and scores ──
+  - id: fetch_fixtures
+    type: io.kestra.plugin.core.http.Download
+    uri: https://fantasy.premierleague.com/api/fixtures/
+
+  - id: upload_fixtures
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.fetch_fixtures.uri }}"
+    to: "gs://fpl_raw_archive_de-project-allan/fpl/fixtures/fpl_fixtures_{{ now() | date('yyyy-MM-dd') }}.json"
+    projectId: de-project-allan
+
+  # ── 3. Current gameweek live stats ──
+  - id: fetch_gameweek_live
+    type: io.kestra.plugin.scripts.python.Script
+    taskRunner:
+      type: io.kestra.plugin.scripts.runner.docker.Docker
+    containerImage: python:3.11-slim
+    beforeCommands:
+      - pip install requests
+    outputFiles:
+      - "*.json"
+    script: |
+      import requests
+      import json
+
+      # Get bootstrap data to find the current gameweek
+      resp = requests.get("https://fantasy.premierleague.com/api/bootstrap-static/", timeout=30)
+      data = resp.json()
+
+      # Find the latest finished gameweek
+      current_gw = None
+      for event in data["events"]:
+          if event["is_current"]:
+              current_gw = event["id"]
+              break
+
+      if current_gw is None:
+          for event in reversed(data["events"]):
+              if event["finished"]:
+                  current_gw = event["id"]
+                  break
+
+      if current_gw:
+          # Fetch live stats for that gameweek
+          live_resp = requests.get(
+              f"https://fantasy.premierleague.com/api/event/{current_gw}/live/",
+              timeout=30
+          )
+          live_data = live_resp.json()
+          live_data["_gameweek"] = current_gw
+
+          with open(f"gw_{current_gw}_live.json", "w") as f:
+              json.dump(live_data, f)
+
+          print(f"Fetched live data for GW {current_gw}")
+      else:
+          print("No finished gameweek found — season may not have started yet")
+          # Write an empty marker so the flow doesn't fail
+          with open("gw_0_not_started.json", "w") as f:
+              json.dump({"status": "season_not_started"}, f)
+
+  - id: upload_gameweek_live
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.fetch_gameweek_live.outputFiles | values | first }}"
+    to: "gs://fpl_raw_archive_de-project-allan/fpl/gameweeks/{{ outputs.fetch_gameweek_live.outputFiles | keys | first }}_{{ now() | date('yyyy-MM-dd') }}.json"
+    projectId: de-project-allan
+
+triggers:
+  - id: weekly_monday
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 8 * * 1"
