@@ -10,7 +10,10 @@ terraform/terraform.tfstate.backup
 terraform/*.tfplan
 
 # Data files
+data/
 *.duckdb
+*.csv
+*.parquet
 fpl_sample.json
 
 # Python

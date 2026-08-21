@@ -1,0 +1,103 @@
+id: fbref_ingest
+namespace: xfpl
+
+description: |
+  Weekly FBref extraction pipeline (best-effort).
+  Scrapes progressive passes/carries, defensive actions, 
+  shot-creating actions, and per-90 stats via soccerdata.
+  Rate-limited to avoid Cloudflare blocks.
+  If scraping fails, writes empty fallback CSVs gracefully.
+
+inputs:
+  - id: season
+    type: STRING
+    defaults: "2026"
+
+tasks:
+  - id: scrape_fbref
+    type: io.kestra.plugin.scripts.python.Script
+    taskRunner:
+      type: io.kestra.plugin.scripts.runner.docker.Docker
+    containerImage: python:3.11-slim
+    beforeCommands:
+      - pip install soccerdata pandas
+    outputFiles:
+      - "*.csv"
+    script: |
+      import soccerdata as sd
+      import pandas as pd
+      import time
+      from datetime import datetime
+
+      season = "{{ inputs.season }}"
+      today = datetime.now().strftime("%Y-%m-%d")
+
+      # Stat categories to pull from FBref
+      # Each one is a separate HTTP request, so we rate-limit between them
+      stat_types = {
+          "defense": "fbref_defense",           # tackles, interceptions, blocks
+          "passing": "fbref_passing",            # progressive passes, key passes
+          "possession": "fbref_possession",      # progressive carries, touches
+          "gca": "fbref_gca",                    # shot/goal-creating actions
+      }
+
+      DELAY_SECONDS = 6  # FBref allows ~10 req/min, so 6s between requests is safe
+
+      print(f"Scraping FBref for EPL {season} (rate-limited, {DELAY_SECONDS}s between requests)...")
+
+      try:
+          fbref = sd.FBref(leagues="ENG-Premier League", seasons=season)
+
+          for stat_type, file_prefix in stat_types.items():
+              try:
+                  print(f"Fetching {stat_type}...")
+                  df = fbref.read_player_season_stats(stat_type=stat_type)
+                  filename = f"{file_prefix}_{today}.csv"
+                  df.to_csv(filename)
+                  print(f"  {stat_type}: {len(df)} rows -> {filename}")
+              except Exception as e:
+                  print(f"  {stat_type} failed: {e}")
+                  # Write empty fallback for this stat type
+                  empty = pd.DataFrame({"status": ["error"], "error": [str(e)], "date": [today]})
+                  empty.to_csv(f"{file_prefix}_{today}.csv", index=False)
+
+              # Rate-limit: wait between requests to avoid Cloudflare blocks
+              time.sleep(DELAY_SECONDS)
+
+      except Exception as e:
+          print(f"FBref connection failed entirely: {e}")
+          # Write all expected fallback CSVs
+          empty = pd.DataFrame({"status": ["connection_error"], "error": [str(e)], "date": [today]})
+          for file_prefix in stat_types.values():
+              empty.to_csv(f"{file_prefix}_{today}.csv", index=False)
+
+      print("FBref scraping complete.")
+
+  - id: upload_defense
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.scrape_fbref.outputFiles['fbref_defense_' ~ (now() | date('yyyy-MM-dd')) ~ '.csv'] }}"
+    to: "gs://fpl_raw_archive_de-project-allan/fbref/fbref_defense_{{ now() | date('yyyy-MM-dd') }}.csv"
+    projectId: de-project-allan
+
+  - id: upload_passing
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.scrape_fbref.outputFiles['fbref_passing_' ~ (now() | date('yyyy-MM-dd')) ~ '.csv'] }}"
+    to: "gs://fpl_raw_archive_de-project-allan/fbref/fbref_passing_{{ now() | date('yyyy-MM-dd') }}.csv"
+    projectId: de-project-allan
+
+  - id: upload_possession
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.scrape_fbref.outputFiles['fbref_possession_' ~ (now() | date('yyyy-MM-dd')) ~ '.csv'] }}"
+    to: "gs://fpl_raw_archive_de-project-allan/fbref/fbref_possession_{{ now() | date('yyyy-MM-dd') }}.csv"
+    projectId: de-project-allan
+
+  - id: upload_gca
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{ outputs.scrape_fbref.outputFiles['fbref_gca_' ~ (now() | date('yyyy-MM-dd')) ~ '.csv'] }}"
+    to: "gs://fpl_raw_archive_de-project-allan/fbref/fbref_gca_{{ now() | date('yyyy-MM-dd') }}.csv"
+    projectId: de-project-allan
+
+triggers:
+  - id: weekly_monday
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 10 * * 1"
