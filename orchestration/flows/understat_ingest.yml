@@ -65,6 +65,6 @@ tasks:
     projectId: de-project-allan
 
 triggers:
-  - id: weekly_monday
+  - id: weekly_tuesday
     type: io.kestra.plugin.core.trigger.Schedule
-    cron: "0 9 * * 1"
+    cron: "0 9 * * 2"

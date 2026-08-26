@@ -16,6 +16,8 @@ tasks:
   - id: fetch_bootstrap
     type: io.kestra.plugin.core.http.Download
     uri: https://fantasy.premierleague.com/api/bootstrap-static/
+    headers:
+      User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   - id: upload_bootstrap
     type: io.kestra.plugin.gcp.gcs.Upload
@@ -27,6 +29,8 @@ tasks:
   - id: fetch_fixtures
     type: io.kestra.plugin.core.http.Download
     uri: https://fantasy.premierleague.com/api/fixtures/
+    headers:
+      User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   - id: upload_fixtures
     type: io.kestra.plugin.gcp.gcs.Upload
@@ -48,8 +52,12 @@ tasks:
       import requests
       import json
 
+      headers = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+
       # Get bootstrap data to find the current gameweek
-      resp = requests.get("https://fantasy.premierleague.com/api/bootstrap-static/", timeout=30)
+      resp = requests.get("https://fantasy.premierleague.com/api/bootstrap-static/", headers=headers, timeout=30)
       data = resp.json()
 
       # Find the latest finished gameweek
@@ -69,6 +77,7 @@ tasks:
           # Fetch live stats for that gameweek
           live_resp = requests.get(
               f"https://fantasy.premierleague.com/api/event/{current_gw}/live/",
+              headers=headers,
               timeout=30
           )
           live_data = live_resp.json()
@@ -91,6 +100,6 @@ tasks:
     projectId: de-project-allan
 
 triggers:
-  - id: weekly_monday
+  - id: weekly_tuesday
     type: io.kestra.plugin.core.trigger.Schedule
-    cron: "0 8 * * 1"
+    cron: "0 8 * * 2"
