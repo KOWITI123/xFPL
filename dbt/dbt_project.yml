@@ -1,0 +1,48 @@
+name: 'xfpl'
+version: '1.0.0'
+config-version: 2
+
+profile: 'xfpl'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  xfpl:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+    marts:
+      +materialized: table
+      +schema: marts
+      dim_players:
+        +materialized: table
+      dim_teams:
+        +materialized: table
+      dim_gameweeks:
+        +materialized: table
+      dim_fixtures:
+        +materialized: table
+      dim_player_crossref:
+        +materialized: table
+      fct_player_snapshots:
+        +materialized: incremental
+        +incremental_strategy: merge
+      fct_player_underlying:
+        +materialized: incremental
+        +incremental_strategy: merge
+      mart_player_performance_edge:
+        +materialized: table
+      mart_fixture_player_recommendations:
+        +materialized: table

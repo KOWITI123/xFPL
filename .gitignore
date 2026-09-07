@@ -2,6 +2,8 @@
 creds/
 .env
 *.tfvars
+*.pem
+*.key
 
 # Terraform
 terraform/.terraform/
@@ -9,25 +11,39 @@ terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/*.tfplan
 
-# Data files
+# Data files & local artifacts
 data/
+downloaded_files/
+soccerdata/
 *.duckdb
 *.csv
+!dbt/seeds/*.csv
 *.parquet
 fpl_sample.json
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
 .venv/
 venv/
+ENV/
 
 # dbt
-/target
 dbt/target/
 dbt/dbt_packages/
 dbt/logs/
+dbt/profiles.yml
+dbt/.user.yml
+.user.yml
 
-# OS
+# Logs & temp
+*.log
+*.tmp
+
+# OS & Editor
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/

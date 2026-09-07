@@ -1,0 +1,257 @@
+version: 2
+
+models:
+  - name: dim_players
+    description: "Current dimension table of all Premier League players in FPL with reconciled cross-source identifiers"
+    columns:
+      - name: player_id
+        description: "Primary key: FPL player identifier"
+        tests:
+          - unique
+          - not_null
+      - name: full_name
+        tests:
+          - not_null
+      - name: team_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
+      - name: position_name
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['GKP', 'DEF', 'MID', 'FWD', 'UNKNOWN']
+
+  - name: dim_teams
+    description: "Dimension table of all 20 Premier League clubs"
+    columns:
+      - name: team_id
+        description: "Primary key: Team identifier"
+        tests:
+          - unique
+          - not_null
+      - name: team_name
+        tests:
+          - not_null
+      - name: short_name
+        tests:
+          - not_null
+
+  - name: dim_gameweeks
+    description: "Dimension table of all 38 Premier League gameweeks"
+    columns:
+      - name: gameweek
+        description: "Primary key: Gameweek number (1 to 38)"
+        tests:
+          - unique
+          - not_null
+      - name: deadline_time
+        tests:
+          - not_null
+
+  - name: dim_fixtures
+    description: "Dimension table of all 380 Premier League fixtures"
+    columns:
+      - name: fixture_id
+        description: "Primary key: Fixture identifier"
+        tests:
+          - unique
+          - not_null
+      - name: gameweek
+        tests:
+          - not_null
+      - name: home_team_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
+      - name: away_team_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
+
+  - name: dim_player_crossref
+    description: "Reconciled cross-source identity mapping between FPL, Understat, and FBref"
+    columns:
+      - name: fpl_player_id
+        description: "Primary key: FPL player identifier"
+        tests:
+          - unique
+          - not_null
+      - name: match_method
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['manual_override', 'deterministic', 'fuzzy', 'unmatched']
+
+  - name: fct_player_snapshots
+    description: "Incremental daily market snapshots of player prices, ownership percentages, and transfers"
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: player_id
+      - name: snapshot_date
+        tests:
+          - not_null
+      - name: cost_million
+        tests:
+          - not_null
+
+  - name: fct_player_underlying
+    description: "The Fused Fact Layer: Gameweek-level FPL outcomes joined with Understat underlying metrics. Includes GKP defensive stats, xGC delta, conversion rate, and per-90 rates for all positions."
+    columns:
+      - name: fpl_player_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: player_id
+      - name: gameweek
+        tests:
+          - not_null
+      - name: xg
+        description: "Expected goals (best of Understat or FPL fallback)"
+        tests:
+          - not_null
+      - name: xa
+        description: "Expected assists (best of Understat or FPL fallback)"
+        tests:
+          - not_null
+      - name: xgi
+        description: "Combined expected goal involvement (xG + xA)"
+        tests:
+          - not_null
+      - name: xgc_delta
+        description: "Goals conceded minus expected goals conceded. Negative = outperforming (GKP/DEF)"
+      - name: saves
+        description: "GKP saves in the gameweek"
+      - name: penalties_saved
+        description: "GKP penalties saved in the gameweek"
+      - name: saves_per_90
+        description: "GKP saves rate normalised to 90 minutes"
+      - name: goals_conceded_per_90
+        description: "Goals conceded per 90 minutes (GKP/DEF)"
+      - name: conversion_rate
+        description: "Goals scored divided by shots taken (FWD/MID)"
+      - name: fbref_sota
+        description: "Shots on target against (GKP, from FBRef keeper)"
+      - name: fbref_save_pct
+        description: "Save percentage (GKP, from FBRef keeper)"
+      - name: fbref_tackles_won
+        description: "Tackles won in season (from FBRef misc)"
+      - name: fbref_interceptions
+        description: "Interceptions in season (from FBRef misc)"
+      - name: fbref_crosses
+        description: "Crosses in season (from FBRef misc)"
+      - name: fbref_shots_on_target
+        description: "Shots on target in season (from FBRef shooting)"
+      - name: fbref_sot_pct
+        description: "Shot on target accuracy percentage (from FBRef shooting)"
+
+  - name: mart_player_performance_edge
+    description: "Season-to-date + rolling form analytics with position-specific metrics, regression signals, and edge badges for GKP/DEF/MID/FWD"
+    columns:
+      - name: player_id
+        tests:
+          - unique
+          - not_null
+      - name: regression_signal
+        description: "Position-conditional regression signal: buy/sell/neutral"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['UNDERPERFORMING_BUY_TARGET', 'OVERPERFORMING_SELL_RISK', 'NEUTRAL']
+      - name: edge_badge
+        description: "Position-conditional edge badge"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 'GKP_SWEEPER_KEEPER'
+                  - 'CLEAN_SHEET_MACHINE'
+                  - 'DEFENSIVE_ROCK'
+                  - 'OUT_OF_POSITION_THREAT'
+                  - 'CREATIVE_ENGINE'
+                  - 'CLINICAL_FINISHER'
+                  - 'BUDGET_TALISMAN'
+                  - 'ELITE_PREMIUM'
+                  - 'ROTATION_OR_STANDARD'
+      - name: saves_per_90
+        description: "GKP saves per 90 minutes (season aggregate)"
+      - name: save_pct
+        description: "GKP save percentage: saves / (saves + goals_conceded)"
+      - name: clean_sheet_rate
+        description: "Clean sheets per match (GKP/DEF)"
+      - name: goals_conceded_per_90
+        description: "Goals conceded per 90 (GKP/DEF)"
+      - name: total_xgc_delta
+        description: "Season sum of goals_conceded - xGC. Negative = outperforming (GKP/DEF)"
+      - name: chance_creation_per_90
+        description: "Key passes per 90 (MID creative volume)"
+      - name: xa_per_key_pass
+        description: "xA per key pass — creative quality (MID)"
+      - name: tackles_won_per_90
+        description: "Tackles won per 90 (DEF/MID defensive work rate, from FBRef)"
+      - name: interceptions_per_90
+        description: "Interceptions per 90 (DEF/MID defensive anticipation, from FBRef)"
+      - name: crosses_per_90
+        description: "Crosses per 90 (winger/fullback delivery volume, from FBRef)"
+      - name: xg_buildup_per_90
+        description: "xG buildup involvement per 90 (deep-lying playmakers, from Understat)"
+      - name: conversion_rate
+        description: "Goals / shots — clinical finishing (FWD)"
+      - name: npxg_overperformance
+        description: "Goals minus npxG — finishing quality above/below expected"
+      - name: rolling_3gw_points
+        description: "FPL points summed over last 3 gameweeks"
+      - name: rolling_3gw_xgi
+        description: "xGI summed over last 3 gameweeks"
+      - name: rolling_5gw_points
+        description: "FPL points summed over last 5 gameweeks"
+      - name: rolling_5gw_xgi
+        description: "xGI summed over last 5 gameweeks"
+
+  - name: mart_fixture_player_recommendations
+    description: "Decision mart: position-conditional composite xFPL edge score with fixture difficulty, market arbitrage tags, position_rank and overall_rank"
+    columns:
+      - name: player_id
+        tests:
+          - unique
+          - not_null
+      - name: xfpl_edge_score
+        description: "Position-conditional composite score (0-100). GKP weighted toward save%/xGC/CS, DEF toward CS/xGC/attacking, MID toward creativity, FWD toward clinical finishing."
+        tests:
+          - not_null
+      - name: market_arbitrage_tag
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['HIDDEN_DIFFERENTIAL', 'BANDWAGON_TRAP', 'ESSENTIAL_TEMPLATE', 'STANDARD']
+      - name: position_rank
+        description: "Rank within position by xfpl_edge_score (1 = best)"
+        tests:
+          - not_null
+      - name: overall_rank
+        description: "Overall rank across all positions by xfpl_edge_score (1 = best)"
+        tests:
+          - not_null
+      - name: fixture_adjusted_primary
+        description: "Fixture-adjusted primary metric: xGI per 90 for outfield, save% for GKP"

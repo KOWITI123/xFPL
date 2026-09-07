@@ -29,7 +29,6 @@ services:
     volumes:
       - kestra-data:/app/storage
       - /var/run/docker.sock:/var/run/docker.sock
-      - /tmp:/tmp
       - ../creds:/app/creds:ro
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /app/creds/gcp_key.json

@@ -1,0 +1,35 @@
+version: 2
+
+sources:
+  - name: fpl_raw
+    database: de-project-allan
+    schema: fpl_raw
+    description: "Raw FPL, Understat, and FBref ingested datasets landing from Google Cloud Storage"
+    tables:
+      - name: raw_fpl_bootstrap
+        description: "FPL bootstrap-static JSON data with players, teams, and gameweeks"
+      - name: raw_fpl_fixtures
+        description: "FPL fixtures JSON data with all Premier League fixtures, kickoff times, and scores"
+      - name: raw_fpl_gameweek_live
+        description: "FPL gameweek live JSON data with per-player match stats, points, and BPS"
+      - name: raw_understat_matches
+        description: "Understat match-level CSV data with xG, xA, xGChain, and xGBuildup"
+      - name: raw_understat_season
+        description: "Understat season-level player stats"
+      - name: raw_fbref_standard
+        description: "FBref player standard season stats (minutes, matches, goals, assists)"
+      - name: raw_fbref_keeper
+        description: "FBref goalkeeper season stats (saves, goals against, save%, SoTA, clean sheets)"
+      - name: raw_fbref_shooting
+        description: "FBref shooting season stats (shots, shots on target, SoT%, conversion)"
+      - name: raw_fbref_misc
+        description: "FBref miscellaneous season stats (tackles won, interceptions, crosses, fouls)"
+      - name: raw_fbref_defense
+        description: "FBref player defensive stats (tackles, interceptions, blocks)"
+      - name: raw_fbref_passing
+        description: "FBref player passing stats (progressive passes, key passes)"
+      - name: raw_fbref_possession
+        description: "FBref player possession stats (progressive carries, touches in box)"
+      - name: raw_fbref_gca
+        description: "FBref shot and goal creating actions (SCA, GCA)"
+
