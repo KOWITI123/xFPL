@@ -14,14 +14,27 @@ except ImportError:
     from dashboard.views.profile import player_label
 
 
-def render_compare_view(players: pd.DataFrame, min_minutes: int):
+def render_compare_view(players: pd.DataFrame, candidates: pd.DataFrame, min_minutes: int, position: str = "ALL"):
+    """players = everyone (peer pools); candidates = Control Room matches (selectable players)."""
     st.subheader("⚖️ Head-to-Head")
-    st.caption("Pick 2–3 players in the same position. Percentiles use the same peer pool as the Player Profile tab.")
+    st.caption("Pick 2–3 players in the same position. The lists follow the Control Room filters; "
+               "percentiles still compare against every player in that position.")
 
-    pos = st.radio("Position", ["FWD", "MID", "DEF", "GKP"], horizontal=True, key="cmp_pos")
-    pool = players[players["position_name"] == pos].sort_values("xpts_total", ascending=False, na_position="last")
+    positions = ["FWD", "MID", "DEF", "GKP"]
+    if position in positions:
+        pos = position
+        st.markdown(f"Position: **{pos}** (set in the Control Room)")
+    else:
+        pos = st.radio("Position", positions, horizontal=True, key="cmp_pos")
+    pool = candidates[candidates["position_name"] == pos].sort_values("xpts_total", ascending=False, na_position="last")
     labels = pool.apply(player_label, axis=1).tolist()
-    picked = st.multiselect("Players", labels, default=labels[:2], max_selections=3, key="cmp_players")
+    if len(labels) < 2:
+        st.info(f"Fewer than two {pos}s match the Control Room filters — loosen them to compare.")
+        return
+    # Keep earlier picks that still match the filters; top up to two
+    kept = [l for l in st.session_state.get("cmp_players", []) if l in labels]
+    st.session_state["cmp_players"] = kept if len(kept) >= 2 else (kept + [l for l in labels if l not in kept])[:2]
+    picked = st.multiselect("Players", labels, max_selections=3, key="cmp_players")
     if len(picked) < 2:
         st.info("Select at least two players to compare.")
         return

@@ -75,37 +75,55 @@ except Exception as e:
     st.stop()
 
 # Sidebar Global Controls
+def reset_filters():
+    for k in ["f_name", "f_pos", "f_price", "f_mins", "f_own", "f_teams", "f_signal", "f_tag"]:
+        st.session_state.pop(k, None)
+
+
 st.sidebar.title("⚽ xFPL Control Room")
-horizon = st.sidebar.slider("Planning horizon (GWs)", 1, 8, 5,
-                            help="How many upcoming gameweeks the xPts projection covers")
+st.sidebar.caption("Filters apply **instantly** to every tab — there's no search button. "
+                   "See the results in **🔎 Player Search**; click a row to open a profile.")
+
+with st.sidebar.expander("⚙️ Model settings", expanded=False):
+    horizon = st.slider("Planning horizon (GWs)", 1, 8, 5,
+                        help="How many upcoming gameweeks the xPts projection covers")
+    pool_mins = st.slider("Percentile peer pool: min minutes", 0, 900, 90, step=45,
+                          help="Players below this are left out of the comparison pool on pizza charts")
 raw_df, proj, outlook, ratings, horizon_gws = build_model(raw_players, history, fixtures, teams, horizon)
 
-pool_mins = st.sidebar.slider("Percentile peer pool: min minutes", 0, 900, 90, step=45,
-                              help="Players below this are excluded from the comparison pool on pizza charts")
-
-st.sidebar.divider()
-st.sidebar.caption("Filters for tables & market charts")
+st.sidebar.subheader("🔎 Find players")
+name_query = st.sidebar.text_input("Name", key="f_name", placeholder="e.g. Saka, Gabriel…")
 
 positions = ["ALL"] + sorted(raw_df["position_name"].dropna().unique().tolist())
-selected_pos = st.sidebar.selectbox("Position", positions)
-
-min_cost, max_cost = float(raw_df["cost_million"].min()), float(raw_df["cost_million"].max())
-price_range = st.sidebar.slider("Price Bracket (£m)", min_cost, max_cost, (min_cost, max_cost), step=0.1)
-
-max_mins = int(raw_df["total_minutes"].max())
-min_mins = st.sidebar.slider("Min Minutes Played", 0, max_mins, min(60, max_mins), step=15)
+selected_pos = st.sidebar.selectbox("Position", positions, key="f_pos")
 
 team_names = sorted(raw_df["team_short_name"].dropna().unique().tolist())
-selected_teams = st.sidebar.multiselect("Teams", team_names)
+selected_teams = st.sidebar.multiselect("Teams", team_names, key="f_teams", placeholder="All teams")
 
-signals = ["ALL"] + sorted(raw_df["regression_signal"].dropna().unique().tolist())
-selected_signal = st.sidebar.selectbox("Regression Signal", signals)
+min_cost, max_cost = float(raw_df["cost_million"].min()), float(raw_df["cost_million"].max())
+price_range = st.sidebar.slider("Price (£m)", min_cost, max_cost, (min_cost, max_cost), step=0.1, key="f_price")
 
-tags = ["ALL"] + sorted(raw_df["market_arbitrage_tag"].dropna().unique().tolist())
-selected_tag = st.sidebar.selectbox("Market Arbitrage Tag", tags)
+max_mins = int(raw_df["total_minutes"].max())
+min_mins = st.sidebar.slider("Min minutes played", 0, max_mins, min(90, max_mins), step=15, key="f_mins",
+                             help="Hides fringe players with too little data to judge")
+
+max_own = st.sidebar.slider("Max ownership (%)", 0.0, 100.0, 100.0, step=0.5, key="f_own",
+                            help="Lower this to hunt differentials, e.g. 10%")
+
+with st.sidebar.expander("Signals & tags"):
+    signals = ["ALL"] + sorted(raw_df["regression_signal"].dropna().unique().tolist())
+    selected_signal = st.selectbox("Regression signal", signals, key="f_signal",
+                                   help="Buy target = scoring less than chances deserve; sell risk = the opposite")
+    tags = ["ALL"] + sorted(raw_df["market_arbitrage_tag"].dropna().unique().tolist())
+    selected_tag = st.selectbox("Market tag", tags, key="f_tag",
+                                help="Hidden differential = low owned + strong xGI; bandwagon trap = popular but weak underlying")
 
 # Filter Data
-df = filter_players(raw_df, selected_pos, price_range, min_mins, selected_teams, selected_signal, selected_tag)
+df = filter_players(raw_df, selected_pos, price_range, min_mins, selected_teams, selected_signal, selected_tag,
+                    name=name_query, max_ownership=max_own)
+
+st.sidebar.metric("Players matching", f"{len(df)} / {len(raw_df)}")
+st.sidebar.button("↺ Reset filters", on_click=reset_filters, use_container_width=True)
 
 # Title & High-Level KPI Banner
 st.title("⚽ xFPL: Decision Engine & Scouting Room")
@@ -123,36 +141,57 @@ if missing:
     )
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Players Active", f"{len(df)} / {len(raw_df)}")
+k1.metric("Players matching", f"{len(df)} / {len(raw_df)}")
 k2.metric("Buy Targets", len(df[df["regression_signal"] == "UNDERPERFORMING_BUY_TARGET"]))
 k3.metric("Differentials", len(df[df["market_arbitrage_tag"] == "HIDDEN_DIFFERENTIAL"]))
 top_player = df.sort_values("xpts_next", ascending=False).iloc[0] if not df.empty and horizon_gws else None
 k4.metric(f"Top xPts GW{horizon_gws[0]}" if horizon_gws else "Top xPts",
           f"{top_player['web_name']} ({top_player['xpts_next']:.1f})" if top_player is not None else "N/A")
 
+# Plain-English summary of what the filters are doing
+active = []
+if name_query.strip():
+    active.append(f"name contains “{name_query.strip()}”")
+if selected_pos != "ALL":
+    active.append(selected_pos)
+if selected_teams:
+    active.append(", ".join(selected_teams))
+if price_range != (min_cost, max_cost):
+    active.append(f"£{price_range[0]:.1f}–{price_range[1]:.1f}m")
+if min_mins > 0:
+    active.append(f"{min_mins}+ mins")
+if max_own < 100:
+    active.append(f"≤{max_own:g}% owned")
+if selected_signal != "ALL":
+    active.append(selected_signal)
+if selected_tag != "ALL":
+    active.append(selected_tag)
+st.info(f"**Showing {len(df)} of {len(raw_df)} players** · " + (" · ".join(active) if active else "no filters"),
+        icon="🔎")
+
 # Render Tabs
 tabs = st.tabs([
+    "🔎 Player Search",
     "🧬 Player Profile",
     "⚖️ Head-to-Head",
     "🔮 xPts Planner",
     "🗓️ Fixtures & Teams",
     "📈 Regression",
-    "🎯 Scouting Table",
     "📓 Call Log",
-])
+], key="main_tabs")
 
 with tabs[0]:
-    render_profile_view(raw_df, history, proj, pool_mins, horizon_gws)
+    render_scouting_view(df, len(raw_df))
 with tabs[1]:
-    render_compare_view(raw_df, pool_mins)
+    render_profile_view(raw_df, df, history, proj, pool_mins, horizon_gws)
 with tabs[2]:
-    render_planner_view(df, proj, horizon_gws)
+    render_compare_view(raw_df, df, pool_mins, selected_pos)
 with tabs[3]:
-    render_fixtures_view(df, outlook, ratings)
+    render_planner_view(df, proj, horizon_gws)
 with tabs[4]:
-    render_regression_view(df)
+    render_fixtures_view(df, outlook, ratings)
 with tabs[5]:
-    render_scouting_view(df)
+    render_regression_view(df)
 with tabs[6]:
     render_call_log_view()
 

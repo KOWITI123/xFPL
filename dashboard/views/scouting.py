@@ -1,53 +1,90 @@
 """
-Tab 1: Filterable Scouting Room & Unified Player Mart.
+Tab: Player Search — the advanced search results for the Control Room filters.
+Click a row to open that player's profile.
 """
 import streamlit as st
 import pandas as pd
 
+try:
+    from views.profile import player_label, PROFILE_KEY
+except ImportError:
+    from dashboard.views.profile import player_label, PROFILE_KEY
 
-def render_scouting_view(df: pd.DataFrame):
-    st.subheader("🎯 Unified Scouting & Edge Mart")
-    st.caption("Cross-mart table combining Understat xG, FBRef metrics, FPL points, and fixture difficulty.")
+TABS_KEY = "main_tabs"
+PROFILE_TAB = "🧬 Player Profile"
 
-    search_query = st.text_input("🔍 Search player name:", "")
-    view_df = df.copy()
-    if search_query:
-        view_df = view_df[view_df["web_name"].str.contains(search_query, case=False, na=False)]
+SORT_OPTIONS = {
+    "Projected points (horizon)": ("xpts_total", False),
+    "Projected points next GW": ("xpts_next", False),
+    "Value: xPts per £m": ("xpts_per_m", False),
+    "Chance of goal/assist next GW": ("p_return_next", False),
+    "DefCon chance next GW": ("p_defcon_next", False),
+    "xGI per 90": ("xgi_per_90", False),
+    "Most unlucky (G+A − xGI)": ("xgi_delta", True),
+    "Lowest ownership": ("selected_by_percent", True),
+    "Cheapest": ("cost_million", True),
+    "Season points": ("total_fpl_points", False),
+}
 
-    cols_to_show = [
-        "web_name", "team_short_name", "position_name", "cost_million",
-        "total_minutes", "total_fpl_points", "xpts_next", "xpts_total", "actual_goals", "total_xg", "xg_delta",
-        "npxg_per_shot", "team_xgi_share_pct", "next_opponent", "fixture_difficulty_rating",
-        "xfpl_edge_score", "regression_signal", "edge_badge", "market_arbitrage_tag"
-    ]
+COLUMNS = {
+    "web_name": "Player", "team_short_name": "Team", "position_name": "Pos",
+    "cost_million": st.column_config.NumberColumn("Price", format="£%.1fm"),
+    "selected_by_percent": st.column_config.NumberColumn("Owned", format="%.1f%%"),
+    "total_minutes": st.column_config.NumberColumn("Mins", format="%d"),
+    "total_fpl_points": st.column_config.NumberColumn("Pts", format="%d"),
+    "xpts_next": st.column_config.NumberColumn("xPts next", format="%.1f"),
+    "xpts_total": st.column_config.NumberColumn("xPts horizon", format="%.1f"),
+    "xpts_per_m": st.column_config.NumberColumn("xPts/£m", format="%.2f"),
+    "p_return_next": st.column_config.NumberColumn("P(G/A) next", format="percent"),
+    "p_defcon_next": st.column_config.NumberColumn("P(DefCon) next", format="percent"),
+    "xgi_per_90": st.column_config.NumberColumn("xGI/90", format="%.2f"),
+    "xgi_delta": st.column_config.NumberColumn("G+A − xGI", format="%+.2f"),
+    "next_opponent": "Next opp",
+    "fixture_difficulty_rating": st.column_config.NumberColumn("FDR", format="%d"),
+    "regression_signal": "Signal",
+    "edge_badge": "Badge",
+}
 
+
+def _open_profile(labels: list[str]):
+    """Row click -> load that player in the Profile tab and switch to it."""
+    rows = st.session_state["search_table"].selection.rows
+    if rows:
+        st.session_state[PROFILE_KEY] = labels[rows[0]]
+        st.session_state[TABS_KEY] = PROFILE_TAB
+
+
+def render_scouting_view(df: pd.DataFrame, total: int):
+    st.subheader("🔎 Player Search")
+    st.caption("Results for the filters in the **Control Room** (left). Filters apply instantly — "
+               "no search button needed. **Click any row to open that player's profile.**")
+
+    if df.empty:
+        st.warning("No players match these filters. Loosen them in the Control Room or press **Reset filters**.")
+        return
+
+    c1, c2 = st.columns([2, 3])
+    sort_label = c1.selectbox("Sort by", list(SORT_OPTIONS), key="search_sort")
+    col, ascending = SORT_OPTIONS[sort_label]
+    c2.markdown(f"<div style='padding-top:2rem'><b>{len(df)}</b> of {total} players match</div>",
+                unsafe_allow_html=True)
+
+    view = df.sort_values(col, ascending=ascending, na_position="last")
+    labels = view.apply(player_label, axis=1).tolist()
     st.dataframe(
-        view_df[cols_to_show].sort_values("xfpl_edge_score", ascending=False),
-        column_config={
-            "web_name": "Player",
-            "team_short_name": "Team",
-            "position_name": "Pos",
-            "cost_million": st.column_config.NumberColumn("Cost", format="£%.1fm"),
-            "total_fpl_points": "Pts",
-            "xpts_next": st.column_config.NumberColumn("xPts next", format="%.1f"),
-            "xpts_total": st.column_config.NumberColumn("xPts horizon", format="%.1f"),
-            "actual_goals": "G",
-            "total_xg": "xG",
-            "xg_delta": st.column_config.NumberColumn("xG Delta", format="%+.2f"),
-            "npxg_per_shot": "Shot Qual",
-            "team_xgi_share_pct": "Talisman %",
-            "next_opponent": "Next Opp",
-            "fixture_difficulty_rating": "FDR",
-            "xfpl_edge_score": st.column_config.ProgressColumn("Edge Score", min_value=0, max_value=100, format="%.1f"),
-        },
-        use_container_width=True,
+        view[list(COLUMNS)],
+        column_config=COLUMNS,
         hide_index=True,
+        use_container_width=True,
+        height=560,
+        key="search_table",
+        on_select=lambda: _open_profile(labels),
+        selection_mode="single-row",
     )
 
-    csv_data = view_df.to_csv(index=False).encode("utf-8")
     st.download_button(
-        "📥 Download Filtered Scouting Dataset (CSV)",
-        data=csv_data,
-        file_name="xfpl_scouting_marts.csv",
-        mime="text/csv"
+        "📥 Download these results (CSV)",
+        data=view.to_csv(index=False).encode("utf-8"),
+        file_name="xfpl_player_search.csv",
+        mime="text/csv",
     )

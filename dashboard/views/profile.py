@@ -16,24 +16,36 @@ def player_label(r: pd.Series) -> str:
     return f"{r['web_name']} — {r['team_short_name']} {r['position_name']} £{r['cost_million']:.1f}m"
 
 
+PROFILE_KEY = "profile_player"
+
+
 def player_picker(df: pd.DataFrame, key: str, label: str = "Player", default: str | None = None) -> pd.Series | None:
-    """Search-as-you-type player select, ordered by projected points so the relevant names come first."""
+    """Search-as-you-type player select, ordered by projected points so the relevant names come first.
+    The current choice survives filter changes when possible (and can be set from the Search tab)."""
     opts = df.sort_values("xpts_total", ascending=False, na_position="last")
     labels = opts.apply(player_label, axis=1).tolist()
-    idx = next((i for i, l in enumerate(labels) if default and l.startswith(default + " —")), 0)
-    choice = st.selectbox(label, labels, index=idx if labels else None, key=key)
-    if choice is None:
+    if not labels:
         return None
+    if st.session_state.get(key) not in labels:
+        st.session_state[key] = next((l for l in labels if default and l.startswith(default + " —")), labels[0])
+    choice = st.selectbox(label, labels, key=key,
+                          help="Type to search. The list follows the Control Room filters.")
     return opts.iloc[labels.index(choice)]
 
 
-def render_profile_view(players: pd.DataFrame, history: pd.DataFrame, proj: pd.DataFrame,
-                        min_minutes: int, horizon_gws: list):
+def render_profile_view(players: pd.DataFrame, candidates: pd.DataFrame, history: pd.DataFrame,
+                        proj: pd.DataFrame, min_minutes: int, horizon_gws: list):
+    """players = everyone (percentile peer pools); candidates = Control Room matches (picker list)."""
     st.subheader("🧬 Player Profile")
     st.caption("Percentiles compare the player with every same-position player who has logged at least "
                f"{min_minutes} minutes (adjust in the sidebar). Hover any slice for the raw number and what it means.")
 
-    player = player_picker(players, key="profile_player", default="Haaland")
+    if candidates.empty:
+        st.warning("No players match the Control Room filters — showing everyone instead.")
+        candidates = players
+    elif len(candidates) < len(players):
+        st.caption(f"Choosing from the **{len(candidates)}** players that match your Control Room filters.")
+    player = player_picker(candidates, key=PROFILE_KEY, default="Haaland")
     if player is None:
         st.info("No players available.")
         return

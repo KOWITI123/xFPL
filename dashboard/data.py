@@ -116,14 +116,21 @@ def filter_players(
     min_mins: int,
     teams: list,
     signal: str,
-    tag: str
+    tag: str,
+    name: str = "",
+    max_ownership: float = 100.0,
 ) -> pd.DataFrame:
     """Applies cross-mart filter constraints in pandas."""
     res = df.copy()
+    if name.strip():
+        q = name.strip()
+        res = res[res["web_name"].str.contains(q, case=False, na=False, regex=False)
+                  | res["full_name"].str.contains(q, case=False, na=False, regex=False)]
     if pos != "ALL":
         res = res[res["position_name"] == pos]
     res = res[(res["cost_million"] >= price_range[0]) & (res["cost_million"] <= price_range[1])]
     res = res[res["total_minutes"] >= min_mins]
+    res = res[res["selected_by_percent"] <= max_ownership]
     if teams:
         res = res[res["team_short_name"].isin(teams)]
     if signal != "ALL":
