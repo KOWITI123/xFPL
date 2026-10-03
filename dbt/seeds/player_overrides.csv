@@ -27,8 +27,8 @@ fpl_player_id,fpl_full_name,understat_name,fbref_name,notes
 ,Pedro Lomba Neto,Pedro Neto,Pedro Neto,Portuguese compound name
 ,Joelinton Cássio Apolinário de Lira,Joelinton,Joelinton,Brazilian mononym
 ,Antony Matheus dos Santos,Antony,Antony,Brazilian mononym
-,Sávio Moreira de Oliveira,Savinho,Savinho,Brazilian nickname
-,Igor Thiago Nascimento Rodrigues,Igor Thiago,Igor Thiago,Brazilian compound name
+,Sávio Moreira de Oliveira,Sávio,Savinho,Brazilian nickname
+,Igor Thiago Nascimento Rodrigues,Thiago,Igor Thiago,Brazilian compound name
 ,Pervis Estupiñán Tenorio,Pervis Estupinan,Pervis Estupiñán,Ecuadorian double surname
 ,Bernardo Mota Veiga de Carvalho e Silva,Bernardo Silva,Bernardo Silva,Portuguese compound surname
 ,Ruben dos Santos Gato Alves Dias,Ruben Dias,Rúben Dias,Portuguese compound surname
@@ -44,3 +44,20 @@ fpl_player_id,fpl_full_name,understat_name,fbref_name,notes
 ,Bobby De Cordova-Reid,Bobby Reid,Bobby De Cordova-Reid,Compound surname
 ,Martin Ødegaard,Martin Odegaard,Martin Ødegaard,Transliteration
 ,Jurriën Timber,Jurrien Timber,Jurriën Timber,Diacritics
+,António João Pereira de Albuquerque Tavares da Silva,António Silva,,Long Portuguese full name
+,Levi Samuels Colwill,Levi Colwill,,Middle name in FPL
+,Oli McBurnie,Oliver McBurnie,,Short forename in FPL
+,Ryan Giles,Ryan John Giles,,Middle name in Understat
+,Bruno Borges Fernandes,Bruno Fernandes,,Middle name in FPL
+,Daniel Ballard,Dan Ballard,,Short forename in Understat
+,Kostas Tsimikas,Konstantinos Tsimikas,,Short forename in FPL
+,Trey Nyoni,Treymaurice Nyoni,,Short forename in FPL
+,Destiny Udogie,Iyenoma Destiny Udogie,,Full forename in Understat
+,Tino Livramento,Valentino Livramento,,Short forename in FPL
+,Arnaud Kalimuendo,Arnaud Kalimuendo Muinga,,Full surname in Understat
+,Florentino Ibrain Morris Luís,Florentino Luís,,Long full name in FPL
+,Jaden Philogene,Jaden Philogene-Bidace,,Double-barrelled surname in Understat
+,Rayan Cherki,Mathis Cherki,,Understat uses first forename (Mathis Rayan Cherki)
+,Yéremy Pino Santos,Yeremi Pino,,Spelling differs
+,Robert Lynch Sánchez,Robert Sánchez,,Middle name in FPL
+,Fábio Freitas Gouveia Carvalho,Fabio Carvalho,,Long full name in FPL

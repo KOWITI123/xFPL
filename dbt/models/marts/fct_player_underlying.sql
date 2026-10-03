@@ -59,7 +59,12 @@ understat_gw AS (
         SUM(und.xg_buildup) AS understat_xg_buildup
     FROM {{ ref('stg_understat_matches') }} und
     JOIN crossref cr ON und.understat_player_name = cr.understat_player_name
-    JOIN fixtures fix ON und.match_date = fix.match_date
+    JOIN player_dim pd ON cr.fpl_player_id = pd.player_id
+    -- Match on date AND the player's own team: a date-only join fans out across
+    -- every fixture played that day (e.g. 5 Saturday games => xG counted 5x).
+    JOIN fixtures fix
+        ON und.match_date = fix.match_date
+       AND pd.team_id IN (fix.home_team_id, fix.away_team_id)
     GROUP BY cr.fpl_player_id, fix.gameweek
 ),
 
@@ -117,6 +122,13 @@ SELECT
     l.penalties_missed,
     l.own_goals,
     COALESCE(l.expected_goals_conceded, 0.0) AS expected_goals_conceded,
+
+    -- Defensive contributions (DEF: CBIT >= 10, MID/FWD: CBIRT >= 12 => 2 pts)
+    COALESCE(l.tackles, 0) AS tackles,
+    COALESCE(l.clearances_blocks_interceptions, 0) AS clearances_blocks_interceptions,
+    COALESCE(l.recoveries, 0) AS recoveries,
+    COALESCE(l.defensive_contribution, 0) AS defensive_contribution,
+    l.defensive_contribution_points,
 
     -- Underlying Advanced Metrics (attacking)
     COALESCE(u.understat_xg, l.expected_goals, 0.0) AS xg,

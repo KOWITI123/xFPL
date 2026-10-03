@@ -93,6 +93,12 @@ models:
           - accepted_values:
               arguments:
                 values: ['manual_override', 'deterministic', 'fuzzy', 'unmatched']
+      - name: understat_player_name
+        description: "One Understat player may map to at most one FPL player, otherwise their xG is credited to several"
+        tests:
+          - unique:
+              config:
+                where: "understat_player_name IS NOT NULL"
 
   - name: fct_player_snapshots
     description: "Incremental daily market snapshots of player prices, ownership percentages, and transfers"

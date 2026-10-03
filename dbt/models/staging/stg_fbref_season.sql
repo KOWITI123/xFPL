@@ -1,3 +1,12 @@
+{#
+  FBRef ingestion is disabled by default: the soccerdata scraper needs a Chrome
+  binary the Kestra container does not have, so every raw_fbref_* file in GCS is an
+  error row. Enable with `dbt build --vars '{enable_fbref: true}'` once it is fixed.
+  When disabled this model returns zero rows with the same schema, so the crossref
+  and marts build normally with NULL FBRef columns.
+#}
+{% if var('enable_fbref', false) %}
+
 WITH raw_standard AS (
     SELECT
         TRIM(player) AS fbref_player_name,
@@ -121,3 +130,53 @@ LEFT JOIN raw_shooting sh
     ON s.fbref_player_name = sh.fbref_player_name AND s.fbref_team_name = sh.fbref_team_name
 LEFT JOIN raw_misc m
     ON s.fbref_player_name = m.fbref_player_name AND s.fbref_team_name = m.fbref_team_name
+
+{% else %}
+
+SELECT
+    CAST(NULL AS STRING) AS fbref_player_name,
+    CAST(NULL AS STRING) AS fbref_team_name,
+    CAST(NULL AS INT64) AS matches_played,
+    CAST(NULL AS INT64) AS minutes_played,
+    CAST(NULL AS INT64) AS goals,
+    CAST(NULL AS INT64) AS assists,
+    CAST(NULL AS INT64) AS yellow_cards,
+    CAST(NULL AS INT64) AS red_cards,
+    CAST(NULL AS INT64) AS goals_against,
+    CAST(NULL AS INT64) AS shots_on_target_against,
+    CAST(NULL AS INT64) AS fbref_saves,
+    CAST(NULL AS INT64) AS fbref_clean_sheets,
+    CAST(NULL AS INT64) AS pk_faced,
+    CAST(NULL AS INT64) AS pk_saved,
+    CAST(NULL AS INT64) AS fbref_shots,
+    CAST(NULL AS INT64) AS shots_on_target,
+    CAST(NULL AS INT64) AS tackles_won,
+    CAST(NULL AS INT64) AS interceptions,
+    CAST(NULL AS INT64) AS crosses,
+    CAST(NULL AS INT64) AS fouls_committed,
+    CAST(NULL AS INT64) AS fouls_drawn,
+    CAST(NULL AS INT64) AS offsides,
+    CAST(NULL AS INT64) AS penalties_won,
+    CAST(NULL AS INT64) AS penalties_conceded,
+    CAST(NULL AS INT64) AS own_goals,
+    CAST(NULL AS FLOAT64) AS goals_against_per_90,
+    CAST(NULL AS FLOAT64) AS fbref_save_pct,
+    CAST(NULL AS FLOAT64) AS fbref_clean_sheet_pct,
+    CAST(NULL AS FLOAT64) AS shots_on_target_pct,
+    CAST(NULL AS FLOAT64) AS tackles,
+    CAST(NULL AS FLOAT64) AS blocks,
+    CAST(NULL AS FLOAT64) AS clearances,
+    CAST(NULL AS FLOAT64) AS passes_completed,
+    CAST(NULL AS FLOAT64) AS passes_attempted,
+    CAST(NULL AS FLOAT64) AS progressive_passes,
+    CAST(NULL AS FLOAT64) AS passes_into_final_third,
+    CAST(NULL AS FLOAT64) AS touches,
+    CAST(NULL AS FLOAT64) AS progressive_carries,
+    CAST(NULL AS FLOAT64) AS touches_in_box,
+    CAST(NULL AS FLOAT64) AS take_ons,
+    CAST(NULL AS FLOAT64) AS take_ons_won,
+    CAST(NULL AS FLOAT64) AS shot_creating_actions,
+    CAST(NULL AS FLOAT64) AS goal_creating_actions
+LIMIT 0
+
+{% endif %}

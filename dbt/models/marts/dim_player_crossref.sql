@@ -22,6 +22,24 @@ overrides AS (
     FROM {{ ref('player_overrides') }}
 ),
 
+-- Resolve override spellings to the exact Understat name (accent/case-insensitive),
+-- otherwise e.g. "Joao Pedro" never joins to Understat's "João Pedro" downstream.
+understat_names AS (
+    SELECT DISTINCT
+        understat_player_name,
+        {{ normalize_name('understat_player_name') }} AS norm_name
+    FROM {{ ref('stg_understat_matches') }}
+),
+
+resolved_overrides AS (
+    SELECT
+        ovr.* REPLACE (COALESCE(un.understat_player_name, ovr.understat_player_name) AS understat_player_name)
+    FROM overrides ovr
+    LEFT JOIN understat_names un
+        ON un.norm_name = {{ normalize_name('ovr.understat_player_name') }}
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY ovr.fpl_player_id, ovr.fpl_full_name ORDER BY un.understat_player_name) = 1
+),
+
 deterministic AS (
     SELECT * FROM {{ ref('int_player_deterministic') }}
 ),
@@ -51,7 +69,7 @@ SELECT
         0.0
     ) AS confidence_score
 FROM all_fpl_players fpl
-LEFT JOIN overrides ovr
+LEFT JOIN resolved_overrides ovr
     ON (fpl.fpl_player_id = ovr.fpl_player_id OR fpl.norm_full_name = ovr.norm_override_name)
 LEFT JOIN deterministic det
     ON fpl.fpl_player_id = det.fpl_player_id

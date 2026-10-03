@@ -62,17 +62,22 @@ Accents break database joins because computers treat `Ø` as different from `O`.
 
 ## 📊 Phase 6: The Scouting Dashboard + The Story
 
-Data pipelines are useless if they don't drive actionable decisions. This project closes the loop with an interactive **Looker Studio Dashboard** and a live **Scouting Call Log**.
+Data pipelines are useless if they don't drive actionable decisions. This project closes the loop with an interactive **Streamlit Decision Engine** (with seamless cross-mart filtering) as well as **Looker Studio**, paired with a live **Scouting Call Log**.
 
-### 🔗 Dashboard Link
+### 🚀 Option A: Streamlit Decision Engine (Recommended for Custom Analytics)
+A dedicated Python application (`dashboard/app.py`) providing high-speed cross-mart filtering, interactive Plotly scatter plots with regression baselines, and fixture arbitrage matrices.
+
+```bash
+# Launch Streamlit locally
+streamlit run dashboard/app.py
+```
+* **Unified Cross-Mart Filtering:** Instantly filters players by position, price bracket, minutes, regression signals, and edge badges across all underlying BigQuery marts simultaneously.
+* **Over/Under-Performance Regression Plot:** Interactive Plotly scatter of Goals/Points vs. xG with hovercards and a 45° expected parity reference line.
+* **Fixture Difficulty Matrix:** Visualizes fixture-adjusted xGI against opponent FDR to spot impending fixture swings.
+* **Scouting Story & Call Log:** Interactive cards and status tracking for weekly predictions.
+
+### 🔗 Option B: Google Looker Studio Dashboard
 > **[Interactive Looker Studio Dashboard: xFPL Scouting Room](https://lookerstudio.google.com/)** *(Connect to `fpl_analytics_marts` in BigQuery)*
-
-#### What's in the Dashboard:
-1. **Filterable Scouting Table:** Filter by position, price bracket, and team. Sort by `xg_delta`, `npxg_per_shot`, and automated tags (`CLINICAL_FINISHER`, `DEFENSIVE_ROCK`, `OUT_OF_POSITION_THREAT`).
-2. **Regression Scatter Plot (Points vs. xG):**
-   * **Above the 45° trendline:** Overperformers due for negative regression (sell candidates).
-   * **Below the 45° trendline:** Unlucky underperformers generating high chances without goals (buy-low targets).
-3. **Fixture Difficulty Heatmap:** Color-coded FDR for the next 3–5 gameweeks to spot impending fixture swings.
 
 ---
 
@@ -129,6 +134,7 @@ To maintain intellectual honesty, we log predictions before the Gameweek deadlin
 * **Cloud Storage:** Google Cloud Storage (GCS)
 * **Transformations:** dbt Core 1.12 (`dbt compile`, `dbt test`, `dbt run`)
 * **Orchestration:** Kestra 2.0 (Docker Compose)
+* **Analytics UI:** Streamlit & Plotly + Google Looker Studio
 * **Data Scrapers:** `soccerdata` (FBRef), Understat, Official FPL REST endpoints
 
 ### Running Locally
@@ -145,4 +151,7 @@ dbt test
 
 # 3. Preview Live Marts & Recommendations
 python ../scripts/preview_marts.py
+
+# 4. Launch Streamlit Analytics Dashboard
+streamlit run dashboard/app.py
 ```

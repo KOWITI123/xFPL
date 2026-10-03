@@ -48,6 +48,21 @@ SELECT
     SAFE_CAST(JSON_VALUE(player, '$.stats.expected_assists') AS FLOAT64) AS expected_assists,
     SAFE_CAST(JSON_VALUE(player, '$.stats.expected_goal_involvements') AS FLOAT64) AS expected_goal_involvements,
     SAFE_CAST(JSON_VALUE(player, '$.stats.expected_goals_conceded') AS FLOAT64) AS expected_goals_conceded,
+
+    -- Defensive contributions (FPL 2025/26+): DEF score 2 pts at 10+ CBIT
+    -- (clearances, blocks, interceptions, tackles); MID/FWD at 12+ CBIRT (CBIT + recoveries).
+    -- defensive_contribution is FPL's position-specific count.
+    SAFE_CAST(JSON_VALUE(player, '$.stats.tackles') AS INT64) AS tackles,
+    SAFE_CAST(JSON_VALUE(player, '$.stats.clearances_blocks_interceptions') AS INT64) AS clearances_blocks_interceptions,
+    SAFE_CAST(JSON_VALUE(player, '$.stats.recoveries') AS INT64) AS recoveries,
+    SAFE_CAST(JSON_VALUE(player, '$.stats.defensive_contribution') AS INT64) AS defensive_contribution,
+    -- Points actually awarded, read per fixture from the explain block (correct in double gameweeks)
+    COALESCE((
+        SELECT SUM(SAFE_CAST(JSON_VALUE(stat, '$.points') AS INT64))
+        FROM UNNEST(JSON_EXTRACT_ARRAY(player, '$.explain')) AS fixture_explain,
+             UNNEST(JSON_EXTRACT_ARRAY(fixture_explain, '$.stats')) AS stat
+        WHERE JSON_VALUE(stat, '$.identifier') = 'defensive_contribution'
+    ), 0) AS defensive_contribution_points,
     snapshot_date,
     source_file
 FROM unnested_elements

@@ -23,6 +23,8 @@ WITH player_facts AS (
         saves,
         penalties_saved,
         expected_goals_conceded,
+        defensive_contribution,
+        defensive_contribution_points,
         xg,
         xa,
         npxg,
@@ -52,6 +54,9 @@ season_agg AS (
         position_name,
         cost_million,
         COUNT(DISTINCT gameweek) AS matches_played,
+        COUNTIF(minutes > 0) AS appearances,
+        SUM(defensive_contribution) AS total_defensive_contribution,
+        SUM(defensive_contribution_points) AS total_defensive_contribution_points,
         SUM(minutes) AS total_minutes,
         SUM(fpl_points) AS total_fpl_points,
         SUM(goals_scored) AS actual_goals,
@@ -204,6 +209,20 @@ SELECT
     CASE WHEN s.total_minutes > 0 THEN ROUND(s.total_shots * 90.0 / s.total_minutes, 2) ELSE 0.0 END AS shots_per_90,
     CASE WHEN s.total_minutes > 0 THEN ROUND(s.total_key_passes * 90.0 / s.total_minutes, 2) ELSE 0.0 END AS key_passes_per_90,
     CASE WHEN s.total_minutes > 0 THEN ROUND(s.total_bps * 90.0 / s.total_minutes, 1) ELSE 0.0 END AS bps_per_90,
+
+    -- ═══ Defensive Contribution points (DEF / MID / FWD) ═══════════
+    s.appearances,
+    s.total_defensive_contribution,
+    s.total_defensive_contribution_points,
+    CASE WHEN s.total_minutes > 0
+         THEN ROUND(s.total_defensive_contribution * 90.0 / s.total_minutes, 2)
+         ELSE 0.0
+    END AS defensive_contribution_per_90,
+    -- Share of appearances that hit the threshold (2 pts per hit)
+    CASE WHEN s.appearances > 0
+         THEN ROUND(s.total_defensive_contribution_points / 2.0 / s.appearances, 2)
+         ELSE 0.0
+    END AS defcon_hit_rate,
 
     -- ═══ MID / DEF: Defensive & Playmaking Work ═══════════════════════
     -- FBRef Defensive actions per 90

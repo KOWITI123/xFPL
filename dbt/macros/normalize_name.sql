@@ -9,25 +9,26 @@
                 REGEXP_REPLACE(
                   REGEXP_REPLACE(
                     REGEXP_REPLACE(
-                      NORMALIZE({{ name_column }}, NFD),
-                      r'\pM', ''
+                      REGEXP_REPLACE(
+                        NORMALIZE({{ name_column }}, NFD),
+                        r'\pM', ''
+                      ),
+                      r'[øØ]', 'o'
                     ),
-                    r'[øØ]', 'o'
+                    r'[æÆ]', 'ae'
                   ),
-                  r'[æÆ]', 'ae'
+                  r'[œŒ]', 'oe'
                 ),
-                r'[œŒ]', 'oe'
+                r'[ß]', 'ss'
               ),
-              r'[ß]', 'ss'
+              r'[đĐðÐ]', 'd'
             ),
-            r'[đĐðÐ]', 'd'
+            r'[łŁ]', 'l'
           ),
-          r'[łŁ]', 'l'
+          r'[^a-zA-Z0-9\s]', ' '
         ),
-        r'[^a-zA-Z0-9\s]', ' '
-      ),
-      r'\s+', ' '
+        r'\s+', ' '
+      )
     )
   )
 {% endmacro %}
-

@@ -9,23 +9,25 @@ WITH edge_stats AS (
     SELECT * FROM {{ ref('mart_player_performance_edge') }}
 ),
 
-next_fixtures AS (
-    SELECT
-        f.gameweek,
-        f.fixture_id,
-        f.match_date,
-        f.home_team_id,
-        f.away_team_id,
-        f.home_team_name,
-        f.away_team_name,
-        f.home_difficulty,
-        f.away_difficulty
+-- One row per team: its next unplayed fixture, from that team's own perspective.
+-- (Partitioning by home team alone picked each team's next HOME game, so sides
+-- playing away next were shown the wrong opponent and FDR.)
+team_fixtures AS (
+    SELECT f.gameweek, f.kickoff_time, f.home_team_id AS team_id, f.away_team_name AS opponent_name,
+           'HOME' AS venue, f.home_difficulty AS difficulty
     FROM {{ ref('dim_fixtures') }} f
     WHERE f.is_finished = FALSE
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY f.home_team_id
-        ORDER BY f.gameweek ASC, f.kickoff_time ASC
-    ) = 1
+    UNION ALL
+    SELECT f.gameweek, f.kickoff_time, f.away_team_id AS team_id, f.home_team_name AS opponent_name,
+           'AWAY' AS venue, f.away_difficulty AS difficulty
+    FROM {{ ref('dim_fixtures') }} f
+    WHERE f.is_finished = FALSE
+),
+
+next_fixtures AS (
+    SELECT team_id, opponent_name, venue, difficulty
+    FROM team_fixtures
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY team_id ORDER BY gameweek ASC, kickoff_time ASC) = 1
 ),
 
 dim_players AS (
@@ -39,25 +41,12 @@ player_upcoming AS (
     SELECT
         e.*,
         dp.team_id,
-        CASE
-            WHEN dp.team_id = nf_home.home_team_id THEN 'HOME'
-            WHEN dp.team_id = nf_away.away_team_id THEN 'AWAY'
-            ELSE 'NO_FIXTURE'
-        END AS venue,
-        CASE
-            WHEN dp.team_id = nf_home.home_team_id THEN nf_home.away_team_name
-            WHEN dp.team_id = nf_away.away_team_id THEN nf_away.home_team_name
-            ELSE 'TBD'
-        END AS next_opponent,
-        CASE
-            WHEN dp.team_id = nf_home.home_team_id THEN nf_home.home_difficulty
-            WHEN dp.team_id = nf_away.away_team_id THEN nf_away.away_difficulty
-            ELSE 3
-        END AS fixture_difficulty_rating
+        COALESCE(nf.venue, 'NO_FIXTURE') AS venue,
+        COALESCE(nf.opponent_name, 'TBD') AS next_opponent,
+        COALESCE(nf.difficulty, 3) AS fixture_difficulty_rating
     FROM edge_stats e
     JOIN dim_players dp ON e.player_id = dp.player_id
-    LEFT JOIN next_fixtures nf_home ON dp.team_id = nf_home.home_team_id
-    LEFT JOIN next_fixtures nf_away ON dp.team_id = nf_away.away_team_id
+    LEFT JOIN next_fixtures nf ON dp.team_id = nf.team_id
 ),
 
 scored AS (

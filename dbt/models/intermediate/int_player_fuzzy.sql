@@ -29,6 +29,10 @@ understat_candidates AS (
         {{ normalize_team_name('understat_team_name') }} AS std_team_name,
         {{ normalize_name('understat_player_name') }} AS norm_player_name
     FROM {{ ref('stg_understat_matches') }}
+    WHERE understat_player_name NOT IN (
+        SELECT understat_player_name FROM {{ ref('int_player_deterministic') }}
+        WHERE understat_player_name IS NOT NULL
+    )
 ),
 
 fbref_candidates AS (
@@ -38,6 +42,10 @@ fbref_candidates AS (
         {{ normalize_team_name('fbref_team_name') }} AS std_team_name,
         {{ normalize_name('fbref_player_name') }} AS norm_player_name
     FROM {{ ref('stg_fbref_season') }}
+    WHERE fbref_player_name NOT IN (
+        SELECT fbref_player_name FROM {{ ref('int_player_deterministic') }}
+        WHERE fbref_player_name IS NOT NULL
+    )
 ),
 
 fuzzy_understat AS (
@@ -45,22 +53,29 @@ fuzzy_understat AS (
         u.fpl_player_id,
         und.understat_player_id,
         und.understat_player_name,
+        -- EDIT_DISTANCE caps its result at max_distance, so the cap must sit above the
+        -- accept threshold (3) or every pair would look like a match.
         LEAST(
-            COALESCE(EDIT_DISTANCE(u.norm_full_name, und.norm_player_name, max_distance => 3), 99),
-            COALESCE(EDIT_DISTANCE(u.norm_web_name, und.norm_player_name, max_distance => 3), 99)
+            EDIT_DISTANCE(u.norm_full_name, und.norm_player_name, max_distance => 4),
+            EDIT_DISTANCE(u.norm_web_name, und.norm_player_name, max_distance => 4)
         ) AS dist_und,
         CASE WHEN u.std_team_name = und.std_team_name THEN 0 ELSE 1 END AS team_diff
     FROM unmatched_fpl u
     JOIN understat_candidates und
         ON (
             (u.std_team_name = und.std_team_name AND (
-                EDIT_DISTANCE(u.norm_full_name, und.norm_player_name, max_distance => 3) <= 3
-                OR EDIT_DISTANCE(u.norm_web_name, und.norm_player_name, max_distance => 3) <= 3
+                EDIT_DISTANCE(u.norm_full_name, und.norm_player_name, max_distance => 4) <= LEAST(3, DIV(LENGTH(und.norm_player_name), 4))
+                OR EDIT_DISTANCE(u.norm_web_name, und.norm_player_name, max_distance => 4) <= LEAST(3, DIV(LENGTH(und.norm_player_name), 4))
             ))
             OR (u.norm_full_name = und.norm_player_name)
         )
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY u.fpl_player_id
+        ORDER BY team_diff ASC, dist_und ASC
+    ) = 1
+    -- Mutual best match: a source player can only be claimed by its closest FPL player
+    AND ROW_NUMBER() OVER (
+        PARTITION BY und.understat_player_name
         ORDER BY team_diff ASC, dist_und ASC
     ) = 1
 ),
@@ -70,21 +85,25 @@ fuzzy_fbref AS (
         u.fpl_player_id,
         fbr.fbref_player_name,
         LEAST(
-            COALESCE(EDIT_DISTANCE(u.norm_full_name, fbr.norm_player_name, max_distance => 3), 99),
-            COALESCE(EDIT_DISTANCE(u.norm_web_name, fbr.norm_player_name, max_distance => 3), 99)
+            EDIT_DISTANCE(u.norm_full_name, fbr.norm_player_name, max_distance => 4),
+            EDIT_DISTANCE(u.norm_web_name, fbr.norm_player_name, max_distance => 4)
         ) AS dist_fbr,
         CASE WHEN u.std_team_name = fbr.std_team_name THEN 0 ELSE 1 END AS team_diff
     FROM unmatched_fpl u
     JOIN fbref_candidates fbr
         ON (
             (u.std_team_name = fbr.std_team_name AND (
-                EDIT_DISTANCE(u.norm_full_name, fbr.norm_player_name, max_distance => 3) <= 3
-                OR EDIT_DISTANCE(u.norm_web_name, fbr.norm_player_name, max_distance => 3) <= 3
+                EDIT_DISTANCE(u.norm_full_name, fbr.norm_player_name, max_distance => 4) <= LEAST(3, DIV(LENGTH(fbr.norm_player_name), 4))
+                OR EDIT_DISTANCE(u.norm_web_name, fbr.norm_player_name, max_distance => 4) <= LEAST(3, DIV(LENGTH(fbr.norm_player_name), 4))
             ))
             OR (u.norm_full_name = fbr.norm_player_name)
         )
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY u.fpl_player_id
+        ORDER BY team_diff ASC, dist_fbr ASC
+    ) = 1
+    AND ROW_NUMBER() OVER (
+        PARTITION BY fbr.fbref_player_name
         ORDER BY team_diff ASC, dist_fbr ASC
     ) = 1
 )
